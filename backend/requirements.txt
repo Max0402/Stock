@@ -1,0 +1,26 @@
+# ── Web 框架 ──────────────────────────────
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# ── 資料庫 ────────────────────────────────
+sqlalchemy>=2.0
+psycopg[binary]>=3.2        # 連 PostgreSQL / Supabase 用（本機用 SQLite 時不需要）
+
+# ── 設定 / 驗證 ───────────────────────────
+pydantic>=2.7
+pydantic-settings>=2.3
+
+# ── 市場資料 & 計算 ───────────────────────
+yfinance>=0.2.50            # 美股 + 台股（代碼加 .TW / .TWO）
+pandas>=2.2
+numpy>=1.26
+
+# ── 新聞 ──────────────────────────────────
+feedparser>=6.0             # 解析 Google News RSS
+httpx>=0.27                 # 抓 RSS（可設定 timeout）
+
+# ── 排程（每小時 Cron Job）────────────────
+apscheduler>=3.10,<4        # 注意：4.x 是全新 API，這裡固定 3.x
+
+# ── AI 摘要（選用，有 ANTHROPIC_API_KEY 才會啟用）──
+anthropic>=1.0

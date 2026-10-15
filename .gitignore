@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# 本機資料庫與機密
+*.db
+.env
+
+# OS / 編輯器
+.DS_Store
+.idea/
+.vscode/

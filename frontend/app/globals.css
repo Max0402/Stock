@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+ * 設計 Token（Tailwind v4 寫法）：在 @theme 定義的 --color-xxx 會自動產生
+ * bg-xxx / text-xxx / border-xxx 等 class。命名沿用 shadcn/ui 慣例。
+ * 交易看盤介面採深色主題，長時間盯盤比較不刺眼。
+ */
+@theme {
+  --color-background: #0a0e17;
+  --color-foreground: #e5e9f0;
+  --color-card: #111827;
+  --color-card-foreground: #e5e9f0;
+  --color-muted: #1a2233;
+  --color-muted-foreground: #8b95a7;
+  --color-border: #1f2a3d;
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-ring: #3b82f6;
+
+  /* 漲跌色：預設台灣慣例「紅漲綠跌」，下方 data-convention="us" 時互換 */
+  --color-up: #ef4444;
+  --color-down: #22c55e;
+
+  /* 買賣價位線（刻意避開紅綠，不會跟漲跌色搞混） */
+  --color-zone: #38bdf8;
+  --color-target: #fbbf24;
+  --color-stop: #e879f9;
+
+  --font-sans: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+
+:root[data-convention="us"] {
+  --color-up: #22c55e;
+  --color-down: #ef4444;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 數字用等寬字，價格跳動時不會左右晃 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
