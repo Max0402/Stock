@@ -1,0 +1,23 @@
+# Render Blueprint：在 Render 選「New → Blueprint」並指定這個 GitHub repo，
+# 就會依照這個檔案自動建立服務（詳細步驟見 docs/DEPLOY.md）。
+services:
+  - type: web
+    name: stock-tracker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true            # push 到 GitHub 後自動重新部署
+    envVars:
+      - key: DATABASE_URL       # 建立時會請你貼上 Neon / Supabase 的 PostgreSQL 連線字串
+        sync: false
+      - key: APP_USERNAME
+        value: admin
+      - key: APP_PASSWORD       # Render 自動產生隨機密碼（到 Environment 頁面可以查看）
+        generateValue: true
+      - key: CRON_SECRET        # 給 GitHub Actions 每小時呼叫排程用
+        generateValue: true
+      - key: DATA_PROVIDER
+        value: yfinance
+      - key: BASE_CURRENCY
+        value: TWD

@@ -16,6 +16,13 @@
 
 ---
 
+## 🌐 部署成真正的網站
+
+想要一個手機、電腦隨時都能打開的網址（例如 `https://stock-tracker-xxxx.onrender.com`），不用每次開終端機：
+👉 照著 **[`docs/DEPLOY.md`](docs/DEPLOY.md)** 一步一步做（Render + Neon 免費方案，含密碼保護）。
+
+---
+
 ## 📚 文件導覽（對應需求的 5 個項目）
 
 | # | 需求 | 在哪裡 |
@@ -115,7 +122,7 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 85 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
+cd backend && pytest -q          # 102 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```
@@ -147,6 +154,7 @@ Stock/
 │   │   │   ├── market_data.py    # yfinance / Demo 行情 + 快取
 │   │   │   ├── portfolio.py      # 損益計算公式
 │   │   │   └── catalog.py        # 藍籌股清單與簡介
+│   │   ├── security.py           # 密碼保護（Basic Auth）+ 安全標頭
 │   │   ├── jobs/hourly_news.py   # ⭐ 每小時排程
 │   │   └── check_sources.py      # 連線診斷：python -m app.check_sources
 │   └── tests/                    # pytest
@@ -167,7 +175,10 @@ Stock/
 │   │   └── ui/                   # shadcn/ui 風格基礎元件
 │   └── lib/                      # api.ts、types.ts、format.ts、market-colors.tsx
 ├── database/schema.sql           # PostgreSQL Schema
-└── docs/                         # 架構、演算法說明
+├── Dockerfile                    # 部署用：前端 + 後端打包成一個映像檔
+├── render.yaml                   # Render 一鍵部署設定
+├── .github/workflows/            # GitHub Actions：每小時更新新聞
+└── docs/                         # 架構、演算法、部署說明
 ```
 
 ---
@@ -177,7 +188,8 @@ Stock/
 這個專案刻意示範了幾個常見的 Web 資安防護，詳細表格見 [`docs/ARCHITECTURE.md` §5](docs/ARCHITECTURE.md#5-安全性設計security-notes)：
 輸入白名單驗證、IDOR 防護、排程 API 密鑰 + `compare_digest`、外部連結 XSS 過濾、`rel="noopener noreferrer"`、LLM Prompt Injection 防護、機密只放後端 `.env`、CORS 白名單。
 
-> ⚠️ 目前是**單人模式**，沒有登入功能，請不要直接部署到公開網路。多人使用前請先接上 Supabase Auth / NextAuth（見 `backend/app/deps.py` 的註解）。
+> ⚠️ 這是**單人使用**的設計：部署到網路上時，請務必設定 `APP_PASSWORD`，啟用整個網站的密碼保護（見 [`docs/DEPLOY.md`](docs/DEPLOY.md)）。
+> 要開放多人註冊，需要另外接上 Supabase Auth / NextAuth 等帳號系統（見 `backend/app/deps.py` 的註解）。
 
 ---
 

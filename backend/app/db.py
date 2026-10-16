@@ -18,7 +18,19 @@ class Base(DeclarativeBase):
     """所有 ORM Model 的父類別。"""
 
 
+def normalize_db_url(url: str) -> str:
+    """
+    雲端資料庫（Neon、Supabase、Render…）給的連線字串通常是 postgres:// 或 postgresql://，
+    SQLAlchemy 需要指定驅動程式才會用 psycopg 3 → 自動轉成 postgresql+psycopg://，貼上就能用。
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def _make_engine(url: str):
+    url = normalize_db_url(url)
     kwargs: dict = {"pool_pre_ping": True}
     if url.startswith("sqlite"):
         # SQLite 預設只允許建立連線的執行緒使用；

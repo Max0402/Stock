@@ -1,0 +1,11 @@
+# 不需要放進映像檔的東西（讓 build 更快，也避免把機密打包進去）
+.git
+**/node_modules
+**/.next
+**/out
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.db
+**/.env
+docs

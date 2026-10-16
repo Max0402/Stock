@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     # 手動觸發排程 API 的密鑰；留空 = 停用該 API。
     cron_secret: str = ""
+    # 網站密碼保護（部署到網路上時「一定要」設定 APP_PASSWORD）；留空 = 不需要登入
+    app_username: str = "admin"
+    app_password: str = ""
+
+    # ── 部署 ────────────────────────────────────────────────
+    # 前端 build 出來的靜態檔資料夾（Docker 映像檔裡會自動設定）。
+    # 有設定時，FastAPI 會同時提供網頁 + API → 整個 App 只需要一個網址。
+    static_dir: str | None = None
 
     # ── 排程（Cron Job）─────────────────────────────────────
     # 是否在 API 伺服器內啟動 APScheduler。
