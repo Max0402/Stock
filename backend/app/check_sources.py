@@ -8,13 +8,14 @@
 不論 .env 的 DATA_PROVIDER 設定為何，這裡一律測「真實」資料來源。
 """
 
+import json
 import logging
 import sys
 import time
 
 from .config import get_settings
 from .services.market_data import YFinanceProvider
-from .services.news import PROVIDERS, select_articles
+from .services.news import PROVIDERS, relevance_terms, select_articles
 from .services.symbols import normalize_symbol
 
 
@@ -36,6 +37,8 @@ def check(symbol: str) -> None:
     print(f"  日K    {'✅' if df is not None else '❌'} {f'{len(df)} 根，最後一天 {df.index[-1]:%Y-%m-%d}' if df is not None else err}  [{sec:.1f}s]")
 
     settings = get_settings()
+    terms = relevance_terms(symbol)
+    print(f"  關鍵字 {terms}")
     for name, fn in PROVIDERS.items():
         if name not in settings.news_sources:
             print(f"  {name:<7}⏭️  未啟用（NEWS_SOURCES）")
@@ -46,10 +49,30 @@ def check(symbol: str) -> None:
         elif got is None:
             print(f"  {name:<7}⏭️  不適用於這檔股票（或未設定 API Key）")
         else:
-            trusted = select_articles(got, trusted_only=True)
-            print(f"  {name:<7}✅ 抓到 {len(got)} 則，可信來源 {len(trusted)} 則  [{sec:.1f}s]")
-            for a in trusted[:3]:
+            kept = select_articles(got, trusted_only=True, terms=terms)
+            print(f"  {name:<7}✅ 抓到 {len(got)} 則 → 可信且相關 {len(kept)} 則  [{sec:.1f}s]")
+            for a in kept[:3]:
                 print(f"           · [{a.source}] {a.title[:70]}")
+            if name == "yahoo" and not got:
+                _debug_yahoo_raw(symbol)
+
+
+def _debug_yahoo_raw(symbol: str) -> None:
+    """Yahoo 回傳 0 則時：印出原始資料結構，判斷是「Yahoo 沒給資料」還是「我們解析失敗」。"""
+    import yfinance as yf
+
+    try:
+        raw = yf.Ticker(symbol).get_news(count=5)
+    except Exception as exc:
+        print(f"           🔍 原始請求失敗：{type(exc).__name__}: {exc}")
+        return
+    print(f"           🔍 Yahoo 原始回傳 {len(raw)} 筆")
+    if raw:
+        first = raw[0]
+        content = first.get("content") if isinstance(first.get("content"), dict) else {}
+        print(f"           🔍 第一筆欄位：{sorted(first)}")
+        print(f"           🔍 content 欄位：{sorted(content)}")
+        print("           🔍 內容片段：" + json.dumps(first, ensure_ascii=False, default=str)[:600])
 
 
 if __name__ == "__main__":

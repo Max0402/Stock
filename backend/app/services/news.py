@@ -34,6 +34,7 @@ import numpy as np
 from ..config import get_settings
 from .cache import TTLCache
 from .catalog import CATALOG
+from .market_data import get_name
 from .news_sources import TIER_RANK, classify_source, google_site_filter
 from .symbols import symbol_info
 
@@ -91,11 +92,49 @@ def _is_http(url: str | None) -> bool:
     return bool(url) and url.startswith(("https://", "http://"))
 
 
+# ── 相關性：避免搜到「標題根本沒提到這家公司」的新聞 ──────────────────
+_NAME_SUFFIX_RE = re.compile(
+    r"[,.]?\s+(inc|corp|corporation|co|company|ltd|limited|holdings?|plc|group|sa|nv|ag)\.?$", re.IGNORECASE
+)
+# 報價頁、行情頁不是新聞（例如「XXX Stock Price Today - WSJ」）
+_NOISE_RE = re.compile(
+    r"stock price today|stock price,? news|stock quote|share price & news|price, news & analysis|股價走勢圖",
+    re.IGNORECASE,
+)
+
+
+def relevance_terms(symbol: str) -> list[str]:
+    """這檔股票的關鍵字：藍籌股用 catalog 設定；其他股票用代碼 + Yahoo 上的公司名稱。"""
+    if symbol in CATALOG and CATALOG[symbol].keywords:
+        return list(CATALOG[symbol].keywords)
+    terms = [symbol_info(symbol).code.lower()]
+    try:
+        name = get_name(symbol) or ""
+    except Exception:
+        name = ""
+    for _ in range(3):  # "Apple Inc." → "Apple"；"Intel Corporation" → "Intel"
+        name = _NAME_SUFFIX_RE.sub("", name).strip()
+    if len(name) >= 3:
+        terms.append(name.lower())
+    return terms
+
+
+def is_relevant(title: str, terms: list[str]) -> bool:
+    low = title.lower()
+    for t in terms:
+        if t.isascii():
+            # 英數字要「完整比對」：避免 "apple" 誤中 "pineapple"；但 "台積電2330" 這種黏在中文後面的代碼要能命中
+            if re.search(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", low):
+                return True
+        elif t in title:
+            return True
+    return False
+
+
 def news_query(symbol: str) -> str:
     if symbol in CATALOG:
         return CATALOG[symbol].news_query
-    info = symbol_info(symbol)
-    return f"{info.code} 股票" if info.market == "TW" else f"{info.code} stock"
+    return " OR ".join(relevance_terms(symbol)[:2])
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -110,17 +149,18 @@ def parse_yahoo_news(items: list[dict]) -> list[RawArticle]:
     out: list[RawArticle] = []
     for item in items:
         c = item.get("content") or item
-        if c.get("contentType") not in (None, "STORY"):
-            continue  # 跳過影片等非文章內容
+        if "video" in str(c.get("contentType") or "").lower():
+            continue  # 跳過影片（大小寫都可能出現，所以統一轉小寫判斷）
         title = (c.get("title") or "").strip()
         canonical = (c.get("canonicalUrl") or {}).get("url")
         click = (c.get("clickThroughUrl") or {}).get("url")
-        url = canonical or click or c.get("link")
+        url = canonical or click or c.get("link") or c.get("url")
         provider = c.get("provider") or {}
         source = provider.get("displayName") or c.get("publisher")
 
-        if c.get("pubDate"):
-            published = datetime.fromisoformat(c["pubDate"].replace("Z", "+00:00"))
+        when = c.get("pubDate") or c.get("displayTime")
+        if when:
+            published = datetime.fromisoformat(when.replace("Z", "+00:00"))
         elif c.get("providerPublishTime"):
             published = datetime.fromtimestamp(int(c["providerPublishTime"]), tz=timezone.utc)
         else:
@@ -141,7 +181,7 @@ def fetch_yahoo_news(symbol: str) -> list[RawArticle]:
 # ═════════════════════════════════════════════════════════════════════
 def google_news_rss_url(symbol: str, trusted_only: bool = True) -> str:
     market = symbol_info(symbol).market
-    query = news_query(symbol)
+    query = f"({news_query(symbol)})"  # 加括號：(台積電 OR 2330) (site:… OR site:…) 才不會被拆錯
     if trusted_only:
         query += " " + google_site_filter(market)
     q = quote_plus(f"{query} when:2d")
@@ -151,10 +191,17 @@ def google_news_rss_url(symbol: str, trusted_only: bool = True) -> str:
 
 
 def _clean_title(title: str, source: str | None) -> str:
-    # Google News 標題長這樣：「台積電法說會優於預期 - 經濟日報」→ 去掉後面的來源
-    if source and title.endswith(f" - {source}"):
-        return title[: -len(source) - 3].strip()
-    return title.strip()
+    """
+    Google News 標題長這樣：「台積電法說會優於預期 - 經濟日報」→ 去掉後面的來源。
+    來源寫法不一定跟 <source> 一致（例如 WSJ vs. The Wall Street Journal），所以也用白名單比對。
+    """
+    title = title.strip()
+    if " - " in title:
+        head, tail = title.rsplit(" - ", 1)
+        tail = tail.strip()
+        if (source and tail.lower() == source.strip().lower()) or classify_source(tail) is not None:
+            return head.strip()
+    return title
 
 
 def parse_google_rss(content: bytes) -> list[RawArticle]:
@@ -321,12 +368,23 @@ PROVIDERS = {
 }
 
 
-def select_articles(articles: list[RawArticle], trusted_only: bool, now: datetime | None = None) -> list[RawArticle]:
-    """過濾 → 統一來源名稱 → 跨來源去重複（保留等級最高的）→ 新到舊排序。"""
+def select_articles(
+    articles: list[RawArticle],
+    trusted_only: bool,
+    now: datetime | None = None,
+    terms: list[str] | None = None,
+) -> list[RawArticle]:
+    """
+    過濾 → 統一來源名稱 → 跨來源去重複（保留等級最高的）→ 新到舊排序。
+    terms：相關性關鍵字。只套用在 Google News（關鍵字搜尋容易混進無關新聞）；
+    Yahoo / Finnhub / 證交所本來就是「依個股」提供，標題不一定寫出公司名稱，所以不套用。
+    """
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=MAX_AGE_HOURS)
     kept: dict[str, RawArticle] = {}
     for a in articles:
-        if a.published_at < cutoff or not _is_http(a.url):
+        if a.published_at < cutoff or not _is_http(a.url) or _NOISE_RE.search(a.title):
+            continue
+        if terms and a.provider == "google" and not is_relevant(a.title, terms):
             continue
         trusted = classify_source(a.source, a.source_url or a.url)
         if trusted_only and trusted is None:
@@ -366,4 +424,4 @@ def fetch_news(symbol: str) -> list[RawArticle]:
 
     if attempted and len(failures) == attempted:
         raise NewsUnavailableError("所有新聞來源都失敗：" + "；".join(failures))
-    return select_articles(results, trusted_only=settings.news_trusted_only)
+    return select_articles(results, trusted_only=settings.news_trusted_only, terms=relevance_terms(symbol))

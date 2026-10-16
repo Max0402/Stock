@@ -108,14 +108,14 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 - **主流媒體**：Reuters、Bloomberg、CNBC、WSJ、MarketWatch、Barron's、Financial Times、AP、Yahoo Finance、中央社、經濟日報、工商時報、鉅亨網、MoneyDJ、今周刊、天下雜誌、DIGITIMES、自由財經…
 - **公司新聞稿**：Business Wire、PR Newswire、GlobeNewswire（第一手但偏宣傳，情緒權重較低）
 
-同一則新聞被多家轉載時只保留一筆（以標題指紋比對，保留等級最高的來源）。要新增或移除媒體，修改 [`backend/app/services/news_sources.py`](backend/app/services/news_sources.py) 的 `TRUSTED_SOURCES` 即可。
+同一則新聞被多家轉載時只保留一筆（以標題指紋比對，保留等級最高的來源）。Google News 是關鍵字搜尋，容易混進無關新聞，所以標題必須提到這家公司（關鍵字設定在 `catalog.py` 的 `keywords`），報價頁（例如「XXX Stock Price Today」）也會被排除。要新增或移除媒體，修改 [`backend/app/services/news_sources.py`](backend/app/services/news_sources.py) 的 `TRUSTED_SOURCES` 即可。
 
 ---
 
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 70 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
+cd backend && pytest -q          # 83 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```

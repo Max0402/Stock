@@ -192,3 +192,63 @@ def test_finnhub_skipped_without_key_or_for_tw(monkeypatch):
     _live_settings(monkeypatch, finnhub_api_key="k")
     assert news.fetch_finnhub_news("2330.TW") is None
     assert news.fetch_twse_announcements("AAPL") is None
+
+
+# ── 相關性與雜訊過濾（案例取自實際 Google News 抓到的標題）─────────────
+from app.services.news import _clean_title, is_relevant, relevance_terms  # noqa: E402
+
+
+def test_relevance_terms_from_catalog():
+    assert "台積電" in relevance_terms("2330.TW") and "tsmc" in relevance_terms("2330.TW")
+    assert relevance_terms("AAPL")[:2] == ["apple", "aapl"]
+    assert relevance_terms("ZZZZ")[0] == "zzzz"  # 不在清單的股票至少有代碼
+
+
+@pytest.mark.parametrize(
+    "title, symbol, expected",
+    [
+        ("Apple, Meta find new common ground as AI reshapes Silicon Valley", "AAPL", True),
+        ("Friday's big stock stories: What's likely to move the market", "AAPL", False),
+        ("Pineapple prices surge", "AAPL", False),            # 不能因為子字串 "apple" 就算相關
+        ("〈台股盤後〉台積電休息 PCB、玻纖布題材強勁", "2330.TW", True),
+        ("台灣砸40億美元德州設AI產業園區 助輝達供應鏈赴美設廠", "2330.TW", False),
+        ("台積電(2330)法說會後外資續看多", "2330.TW", True),
+        ("台積公司2026年第三季每股盈餘新台幣29.43元", "2330.TW", True),
+    ],
+)
+def test_is_relevant(title, symbol, expected):
+    assert is_relevant(title, relevance_terms(symbol)) is expected
+
+
+def test_noise_and_relevance_in_select():
+    arts = [
+        _a("Jersey Mike's Subs Inc. (JMKE) Stock Price Today", "The Wall Street Journal"),  # 報價頁
+        _a("Friday's big stock stories", "CNBC"),                                          # 沒提到 Apple
+        _a("Apple, Meta find new common ground", "CNBC"),
+        _a("Market wrap without company name", "Reuters", provider="yahoo"),  # Yahoo 依個股提供 → 不做相關性過濾
+    ]
+    out = select_articles(arts, trusted_only=True, now=NOW, terms=relevance_terms("AAPL"))
+    assert sorted(a.title for a in out) == ["Apple, Meta find new common ground", "Market wrap without company name"]
+
+
+@pytest.mark.parametrize(
+    "title, source, expected",
+    [
+        ("台積電法說會優於預期 - 經濟日報", "經濟日報", "台積電法說會優於預期"),
+        ("Jersey Mike's Subs (JMKE) - The Wall Street Journal", "WSJ", "Jersey Mike's Subs (JMKE)"),  # 寫法不同也能去掉
+        ("Up - and down - day for chips", "Reuters", "Up - and down - day for chips"),  # 結尾不是媒體名稱 → 保留
+    ],
+)
+def test_clean_title(title, source, expected):
+    assert _clean_title(title, source) == expected
+
+
+def test_parse_yahoo_lenient_variants():
+    items = [
+        {"content": {"contentType": "story", "title": "Lowercase type", "displayTime": "2026-10-15T08:00:00Z",
+                     "provider": {"displayName": "Reuters"}, "clickThroughUrl": {"url": "https://finance.yahoo.com/n/1"}}},
+        {"content": {"contentType": "Video", "title": "skip me", "pubDate": "2026-10-15T08:00:00Z",
+                     "canonicalUrl": {"url": "https://finance.yahoo.com/v/2"}}},
+    ]
+    out = parse_yahoo_news(items)
+    assert [a.title for a in out] == ["Lowercase type"]
