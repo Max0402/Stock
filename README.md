@@ -30,7 +30,9 @@
 
 ## 🚀 快速開始
 
-需要：**Python 3.10+**、**Node.js 20.9+**
+需要：**Python 3.10 以上**（已確認 Windows 上的 3.13 / 3.14 / 3.15 都能直接安裝，不需要 C++ 編譯器）、**Node.js 20.9+**
+
+> Windows 的 PowerShell 如果出現「已停用指令碼執行」，先執行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`（只對目前這個視窗有效），再啟動虛擬環境。
 
 ### 1. 後端（FastAPI）
 

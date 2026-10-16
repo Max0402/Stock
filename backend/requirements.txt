@@ -1,6 +1,8 @@
 # ── Web 框架 ──────────────────────────────
 fastapi>=0.115
-uvicorn[standard]>=0.30
+# 不加 [standard]：那些加速套件（httptools、pyyaml…）在最新版 Python（例如 3.15）的 Windows 上
+# 還沒有預先編譯好的安裝檔，會要求安裝 C++ 編譯器。這個 App 用不到它們，--reload 也照常可用。
+uvicorn>=0.30
 
 # ── 資料庫 ────────────────────────────────
 sqlalchemy>=2.0
