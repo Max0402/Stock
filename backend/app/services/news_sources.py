@@ -86,6 +86,12 @@ def _domain_matches(host: str, domain: str) -> bool:
     return host == domain or host.endswith("." + domain)
 
 
+# 聚合平台：文章「放在」這些網站，不代表是它們「寫」的。
+# 例如 finance.yahoo.com 上同時有 Yahoo 自己的報導，也有 Insider Monkey、Motley Fool 等轉載文章。
+# 所以光看網址在這些網域，不能判斷發布者是否可信，必須看發布者名稱。
+AGGREGATOR_DOMAINS = ("finance.yahoo.com", "news.google.com")
+
+
 def classify_source(name: str | None, url: str | None = None) -> TrustedSource | None:
     """依發布者名稱或網址判斷是否為可信來源；不在白名單回傳 None。"""
     if name:
@@ -94,6 +100,8 @@ def classify_source(name: str | None, url: str | None = None) -> TrustedSource |
             return hit
     if url:
         host = (urlparse(url).hostname or "").lower()
+        if any(_domain_matches(host, d) for d in AGGREGATOR_DOMAINS):
+            return None  # 只知道放在哪個平台、不知道是誰寫的 → 不能算可信
         for s in TRUSTED_SOURCES:
             if any(_domain_matches(host, d) for d in s.domains):
                 return s

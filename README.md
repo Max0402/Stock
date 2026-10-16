@@ -122,7 +122,7 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 102 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
+cd backend && pytest -q          # 108 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```

@@ -291,3 +291,33 @@ def test_yahoo_falls_back_to_search(monkeypatch):
 def test_clean_title_strips_cna_section_suffix():
     assert _clean_title("為胡正明新書站台魏哲家：台積電股價跌心情不好| 生活", "中央社") == "為胡正明新書站台魏哲家：台積電股價跌心情不好"
     assert _clean_title("Apple | Earnings Preview", "CNBC") == "Apple | Earnings Preview"  # 英文不動
+
+
+# ── 聚合平台不能替轉載文章背書（實際案例：Yahoo 上的 Insider Monkey 文章被當成 Yahoo Finance）──
+@pytest.mark.parametrize(
+    "name, url, expected",
+    [
+        ("Insider Monkey", "https://finance.yahoo.com/news/jim-cramer-says-1.html", None),
+        (None, "https://finance.yahoo.com/news/unknown-2.html", None),
+        ("Some Blog", "https://news.google.com/rss/articles/abc", None),
+        ("Yahoo Finance", "https://finance.yahoo.com/news/yahoo-own-3.html", "Yahoo Finance"),  # Yahoo 自己的報導
+        ("Reuters", "https://finance.yahoo.com/news/reuters-4.html", "Reuters"),               # 轉載自路透
+    ],
+)
+def test_aggregator_domain_does_not_vouch(name, url, expected):
+    hit = classify_source(name, url)
+    assert (hit.name if hit else None) == expected
+
+
+def test_syndicated_yahoo_articles_are_filtered():
+    items = [
+        {"title": "Jim Cramer Says Apple Is a Buy", "publisher": "Insider Monkey", "type": "STORY",
+         "link": "https://finance.yahoo.com/news/cramer-1.html", "providerPublishTime": int(NOW.timestamp()),
+         "relatedTickers": ["AAPL"]},
+        {"title": "Apple shares rise after earnings", "publisher": "Reuters", "type": "STORY",
+         "link": "https://finance.yahoo.com/news/apple-2.html", "providerPublishTime": int(NOW.timestamp()),
+         "relatedTickers": ["AAPL"]},
+    ]
+    kept = select_articles(parse_yahoo_news(items, "yahoo_search"), trusted_only=True, now=NOW,
+                           terms=relevance_terms("AAPL"))
+    assert [(a.source, a.title) for a in kept] == [("Reuters", "Apple shares rise after earnings")]
