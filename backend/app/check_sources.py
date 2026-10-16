@@ -74,3 +74,13 @@ def _debug_yahoo_raw(symbol: str) -> None:
 
     show("Ticker.get_news", lambda: yf.Ticker(symbol).get_news(count=5))
     show("Search.news", lambda: yf.Search(symbol, max_results=1, news_count=5, lists_count=0, include_cb=False).news)
+
+
+def main(argv: list[str]) -> None:
+    logging.getLogger("yfinance").setLevel(logging.CRITICAL)  # 隱藏 yfinance 內部的重試訊息
+    for raw in argv or ["AAPL", "2330.TW"]:
+        check(normalize_symbol(raw))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
