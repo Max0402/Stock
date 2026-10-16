@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     # 每小時第幾分鐘執行（0 = 每小時整點）
     news_refresh_minute: int = 0
 
+    # ── 新聞來源 ────────────────────────────────────────────
+    # yahoo  ：Yahoo Finance 個股新聞（免 Key）
+    # google ：Google News RSS，只搜尋白名單裡的財經媒體（免 Key）
+    # twse   ：證交所 OpenAPI「上市公司每日重大訊息」（官方、免 Key，只適用 .TW）
+    # finnhub：Finnhub 公司新聞（需要免費的 FINNHUB_API_KEY，只適用美股）
+    news_sources: list[str] = ["yahoo", "google", "twse", "finnhub"]
+    # 只保留 services/news_sources.py 白名單裡的可信媒體
+    news_trusted_only: bool = True
+    finnhub_api_key: str | None = None
+
     # ── AI 摘要（選用）──────────────────────────────────────
     # 有填 API Key 才會呼叫 Claude 產生摘要；沒填就用內建的規則式摘要。
     anthropic_api_key: str | None = None

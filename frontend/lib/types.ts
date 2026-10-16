@@ -126,10 +126,13 @@ export interface ChartData {
   signal: Signal | null;
 }
 
+export type SourceTier = "official" | "major" | "press_release" | "other";
+
 export interface NewsArticle {
   title: string;
   url: string;
   source: string | null;
+  source_tier: SourceTier;
   published_at: string;
   sentiment_label: SentimentLabel;
   sentiment_score: number;

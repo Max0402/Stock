@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from ..models import NewsArticle, NewsDigest
 from .llm import summarize_news
-from .news import fetch_news, url_hash
+from .news import fetch_news, title_key, url_hash
+from .news_sources import TIER_BONUS, tier_of
 from .sentiment import aggregate_sentiment, rule_based_digest, score_text
 
 log = logging.getLogger(__name__)
@@ -38,30 +39,40 @@ def latest_digest(db: Session, symbol: str) -> NewsDigest | None:
 def refresh_symbol_news(db: Session, symbol: str, display_name: str) -> RefreshResult:
     result = RefreshResult()
 
-    # 1) 抓新聞並去重複（同一個 URL 的 SHA-256 已存在就跳過）
+    # 1) 抓新聞並去重複：
+    #    (a) 同一個網址（SHA-256）已存過 → 跳過
+    #    (b) 網址不同但標題相同（同一則新聞被不同網站轉載）→ 也跳過
     raw = fetch_news(symbol)
-    hashes = {url_hash(a.url): a for a in raw}
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=DIGEST_WINDOW_HOURS)
+    hashes = {url_hash(a.key): a for a in raw}
     existing = set(
         db.scalars(
             select(NewsArticle.url_hash).where(NewsArticle.symbol == symbol, NewsArticle.url_hash.in_(list(hashes)))
         )
     )
+    seen_titles = {
+        title_key(t)
+        for t in db.scalars(
+            select(NewsArticle.title).where(NewsArticle.symbol == symbol, NewsArticle.published_at >= cutoff)
+        )
+    }
     for h, a in hashes.items():
-        if h in existing:
+        if h in existing or title_key(a.title) in seen_titles:
             continue
+        seen_titles.add(title_key(a.title))
         s = score_text(a.title)
         db.add(
             NewsArticle(
                 symbol=symbol, url_hash=h, title=a.title, url=a.url, source=a.source,
                 published_at=a.published_at, sentiment_score=s.score, sentiment_label=s.label,
-                importance=s.importance,
+                # 官方公告、主流媒體的新聞比較容易被選為 Big News
+                importance=round(s.importance + TIER_BONUS.get(a.tier, 0.0), 4),
             )
         )
         result.new_articles += 1
     db.flush()
 
     # 2) 挑出近 48 小時「最重要」的新聞（= Big News）
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=DIGEST_WINDOW_HOURS)
     big_news = list(
         db.scalars(
             select(NewsArticle)
@@ -81,7 +92,8 @@ def refresh_symbol_news(db: Session, symbol: str, display_name: str) -> RefreshR
 
     # 4) 產生摘要：優先用 Claude，失敗或沒設定 API Key 就用規則式
     headlines = [
-        {"title": a.title, "source": a.source, "published_at": a.published_at.isoformat()} for a in big_news
+        {"title": a.title, "source": a.source, "tier": tier_of(a.source, a.url), "published_at": a.published_at.isoformat()}
+        for a in big_news
     ]
     llm = summarize_news(display_name, headlines, score) if big_news else None
     result.llm_called = llm is not None

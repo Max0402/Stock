@@ -171,6 +171,8 @@ class NewsArticleOut(BaseModel):
     title: str
     url: str
     source: str | None
+    # official = 官方公告、major = 主流財經媒體、press_release = 公司新聞稿、other = 白名單以外
+    source_tier: Literal["official", "major", "press_release", "other"]
     published_at: datetime
     sentiment_label: Literal["Bullish", "Bearish", "Neutral"]
     sentiment_score: float

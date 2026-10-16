@@ -7,7 +7,7 @@ import useSWR from "swr";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { safeExternalUrl, timeAgo } from "@/lib/format";
-import type { NewsResponse, SentimentLabel } from "@/lib/types";
+import type { NewsResponse, SentimentLabel, SourceTier } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { SentimentBadge } from "./SentimentBadge";
@@ -18,12 +18,21 @@ const DOT: Record<SentimentLabel, string> = {
   Neutral: "bg-muted-foreground/50",
 };
 
+// 來源等級標籤：讓使用者一眼分辨「官方公告」與「一般媒體報導」
+const TIER: Record<SourceTier, { label: string; className: string } | null> = {
+  official: { label: "官方公告", className: "bg-emerald-500/15 text-emerald-300" },
+  major: { label: "主流媒體", className: "bg-sky-500/15 text-sky-300" },
+  press_release: { label: "公司新聞稿", className: "bg-muted text-muted-foreground" },
+  other: null,
+};
+
 export function NewsPanel({ symbol }: { symbol: string }) {
   // 後端每小時更新一次，前端每 10 分鐘檢查一次就夠了
   const { data, error, isLoading } = useSWR<NewsResponse>(`/api/stocks/${encodeURIComponent(symbol)}/news`, {
     refreshInterval: 10 * 60_000,
   });
   const d = data?.digest;
+  const sources = [...new Set(data?.articles.map((a) => a.source).filter(Boolean))];
 
   return (
     <Card>
@@ -48,6 +57,9 @@ export function NewsPanel({ symbol }: { symbol: string }) {
             </div>
             <p className="text-sm leading-relaxed">📰 {d.summary}</p>
             <p className="text-sm leading-relaxed text-muted-foreground">📈 {d.impact}</p>
+            {sources.length > 0 && (
+              <p className="text-xs text-muted-foreground">來源：{sources.join("、")}</p>
+            )}
           </div>
         )}
 
@@ -56,8 +68,9 @@ export function NewsPanel({ symbol }: { symbol: string }) {
         <ul className="divide-y divide-border">
           {data?.articles.map((a) => {
             const href = safeExternalUrl(a.url);
+            const tier = TIER[a.source_tier];
             return (
-              <li key={a.url} className="flex gap-2.5 py-2">
+              <li key={`${a.url}|${a.title}`} className="flex gap-2.5 py-2">
                 <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", DOT[a.sentiment_label])} title={a.sentiment_label} />
                 <div className="min-w-0">
                   {href ? (
@@ -69,7 +82,8 @@ export function NewsPanel({ symbol }: { symbol: string }) {
                   ) : (
                     <span className="text-sm">{a.title}</span>
                   )}
-                  <div className="text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    {tier && <span className={cn("rounded px-1.5 py-px text-[10px] font-medium", tier.className)}>{tier.label}</span>}
                     {a.source ?? "未知來源"} · {timeAgo(a.published_at)}
                   </div>
                 </div>

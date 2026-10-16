@@ -114,3 +114,26 @@ def test_llm_digest_parsed_and_clamped(monkeypatch):
 def test_llm_bad_outputs_fall_back(monkeypatch, text, stop):
     _patch_client(monkeypatch, _FakeMessages(text, stop))
     assert llm.summarize_news("NVDA", HEADLINES, 0.0) is None
+
+
+def test_pipeline_skips_same_story_from_another_url(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.db import SessionLocal
+    from app.services import news_pipeline
+    from app.services.news import RawArticle
+
+    now = datetime.now(timezone.utc)
+    first = [RawArticle("Intel wins contract with major cloud provider", "https://www.reuters.com/a", "Reuters", now)]
+    again = [RawArticle("Intel wins contract with major cloud provider", "https://www.cnbc.com/b", "CNBC", now)]
+
+    with SessionLocal() as db:
+        monkeypatch.setattr(news_pipeline, "fetch_news", lambda s: first)
+        r1 = news_pipeline.refresh_symbol_news(db, "INTC", "Intel")
+        monkeypatch.setattr(news_pipeline, "fetch_news", lambda s: again)
+        r2 = news_pipeline.refresh_symbol_news(db, "INTC", "Intel")
+    assert r1.new_articles == 1 and r1.digest_created
+    assert r2.new_articles == 0 and not r2.digest_created
+
+    arts = client.get("/api/stocks/INTC/news").json()["articles"]
+    assert len(arts) == 1 and arts[0]["source_tier"] == "major"

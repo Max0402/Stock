@@ -74,4 +74,11 @@ app.include_router(jobs.router)
 @app.get("/api/health")
 def health():
     s = get_settings()
-    return {"status": "ok", "data_provider": s.data_provider, "ai_summary": "claude" if llm_enabled() else "rule"}
+    sources = [n for n in s.news_sources if n != "finnhub" or s.finnhub_api_key]
+    return {
+        "status": "ok",
+        "data_provider": s.data_provider,
+        "news_sources": ["demo"] if s.data_provider == "demo" else sources,
+        "news_trusted_only": s.news_trusted_only,
+        "ai_summary": "claude" if llm_enabled() else "rule",
+    }

@@ -9,7 +9,7 @@
 | 🧾 多市場持股管理 | 輸入代碼（`AAPL`、`2330` 自動補 `.TW`）、股數、買入價、平均成本 → 自動算總市值、未實現損益、今日損益、報酬率；美股以匯率換算成台幣加總 |
 | 🕯️ K 線圖 | 日 K / 週 K 切換，MA5/20/60、布林通道、RSI 副圖可開關（TradingView Lightweight Charts） |
 | 🎯 買賣訊號 | RSI + 布林通道 + 均線趨勢 + 新聞情緒 → 強力買進 / 買進 / 觀望 / 賣出；標出 **Buy Zone、停利 TP、停損 SL、移動停損** |
-| 📰 每小時新聞分析 | 排程抓 Google News → 中英文情緒分析（Bullish / Bearish / Neutral）→ 2 句 AI 摘要與市場影響評估 |
+| 📰 每小時新聞分析 | 排程從 Yahoo Finance、Google News（只取可信媒體）、證交所重大訊息、Finnhub 抓新聞 → 中英文情緒分析（Bullish / Bearish / Neutral）→ 2 句 AI 摘要與市場影響評估 |
 | ⭐ 追蹤清單 | 任何卡片點星星即可收藏 |
 | 🔥 藍籌股推薦 | NVDA、TSLA、AAPL、2330、2454… 基本面簡介 + 目前 AI 評價，一鍵加入追蹤 |
 | 🔴🟢 漲跌色切換 | 台灣「紅漲綠跌」/ 美國「綠漲紅跌」一鍵切換 |
@@ -58,12 +58,21 @@ npm run dev
 
 打開 <http://localhost:3000>。前端的 `/api/*` 會由 Next.js 轉發到 `http://localhost:8000`（可用環境變數 `BACKEND_URL` 修改）。
 
-### 3.（選用）啟用 Claude AI 新聞摘要
+### 3. 確認 Yahoo Finance 與新聞來源連得上
+
+```bash
+cd backend
+python -m app.check_sources AAPL 2330.TW
+```
+
+會逐一列出：報價、日 K、每個新聞來源抓到幾則、其中幾則來自可信媒體。看到 ❌ 就代表那個來源連不上（把訊息貼給我就能幫你查）。
+
+### 4.（選用）啟用 Claude AI 新聞摘要
 
 在 `backend/.env` 填入 `ANTHROPIC_API_KEY=...`。沒填也可以用：系統會改用內建的規則式摘要（卡片上的圖示 🤖 = 規則式、✨ = AI）。
 預設模型是 `claude-opus-5-5`，可用 `ANTHROPIC_MODEL` 修改。新聞沒有變化時不會重複呼叫，以節省費用。
 
-### 4.（選用）改用 PostgreSQL / Supabase
+### 5.（選用）改用 PostgreSQL / Supabase
 
 ```bash
 # 例：用 Docker 開一個本機 PostgreSQL
@@ -82,10 +91,29 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 
 ---
 
+## 📰 新聞來源與可信媒體白名單
+
+| 來源 | 適用 | 需要 Key？ | 說明 |
+| --- | --- | --- | --- |
+| **Yahoo Finance** | 美股、台股 | 不用 | yfinance 個股新聞，原始發布者（Reuters、Bloomberg…）會被保留下來 |
+| **Google News RSS** | 美股、台股 | 不用 | 搜尋時用 `site:` 只找可信媒體；台股用繁中搜尋 |
+| **證交所重大訊息** | 上市股（`.TW`） | 不用 | [TWSE OpenAPI](https://openapi.twse.com.tw/)「上市公司每日重大訊息」，官方第一手資料 |
+| **Finnhub** | 美股 | 免費 Key | 在 `.env` 設定 `FINNHUB_API_KEY` 才會啟用 |
+
+抓回來的新聞只保留白名單裡的發布者（`NEWS_TRUSTED_ONLY=true`），分三級，並顯示在新聞面板：
+
+- **官方公告**：公開資訊觀測站（證交所）
+- **主流媒體**：Reuters、Bloomberg、CNBC、WSJ、MarketWatch、Barron's、Financial Times、AP、Yahoo Finance、中央社、經濟日報、工商時報、鉅亨網、MoneyDJ、今周刊、天下雜誌、DIGITIMES、自由財經…
+- **公司新聞稿**：Business Wire、PR Newswire、GlobeNewswire（第一手但偏宣傳，情緒權重較低）
+
+同一則新聞被多家轉載時只保留一筆（以標題指紋比對，保留等級最高的來源）。要新增或移除媒體，修改 [`backend/app/services/news_sources.py`](backend/app/services/news_sources.py) 的 `TRUSTED_SOURCES` 即可。
+
+---
+
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 49 個測試：指標、訊號、情緒、損益、API、AI 回應解析
+cd backend && pytest -q          # 70 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```
@@ -111,12 +139,14 @@ Stock/
 │   │   │   ├── signals.py        # ⭐ 買賣訊號 + Buy Zone / TP / SL
 │   │   │   ├── sentiment.py      # ⭐ 中英文新聞情緒分析
 │   │   │   ├── llm.py            # Claude AI 摘要（選用）
-│   │   │   ├── news.py           # Google News RSS
+│   │   │   ├── news.py           # 多來源新聞：Yahoo / Google News / 證交所 / Finnhub
+│   │   │   ├── news_sources.py   # 可信媒體白名單與分級
 │   │   │   ├── news_pipeline.py  # 抓新聞 → 去重 → 情緒 → 摘要
 │   │   │   ├── market_data.py    # yfinance / Demo 行情 + 快取
 │   │   │   ├── portfolio.py      # 損益計算公式
 │   │   │   └── catalog.py        # 藍籌股清單與簡介
-│   │   └── jobs/hourly_news.py   # ⭐ 每小時排程
+│   │   ├── jobs/hourly_news.py   # ⭐ 每小時排程
+│   │   └── check_sources.py      # 連線診斷：python -m app.check_sources
 │   └── tests/                    # pytest
 ├── frontend/                     # Next.js 16 (App Router) + Tailwind v4
 │   ├── app/                      # layout.tsx、page.tsx、globals.css（設計 token）

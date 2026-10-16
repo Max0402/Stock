@@ -85,7 +85,10 @@ class YFinanceProvider:
             if math.isnan(price) or math.isnan(prev):
                 raise ValueError("NaN quote")
         except Exception:  # fast_info 偶爾失敗 → 退回用最近 5 天日 K 推算
-            hist = t.history(period="5d", interval="1d")
+            try:
+                hist = t.history(period="5d", interval="1d")
+            except Exception as exc:
+                raise LookupError(f"無法取得 {symbol} 報價（{type(exc).__name__}）") from exc
             if len(hist) < 2:
                 raise LookupError(f"無法取得 {symbol} 報價")
             price, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])

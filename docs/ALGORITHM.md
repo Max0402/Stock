@@ -94,6 +94,19 @@ trailing_stop = 近 22 根最高價 − 3 × ATR       ← 吊燈停損，給「
 
 ## 四、新聞情緒分析
 
+### Step 0：從哪裡抓、只留可信來源
+
+4 個來源平行抓取（任何一個失敗都不影響其他）：Yahoo Finance、Google News RSS、證交所重大訊息（.TW）、Finnhub（美股，選用）。
+接著只保留**可信媒體白名單**裡的發布者（`services/news_sources.py`），並分級：
+
+| 等級 | 範例 | 重要性加分 |
+| --- | --- | --- |
+| 官方公告 official | 公開資訊觀測站 | +0.8 |
+| 主流媒體 major | Reuters、Bloomberg、中央社、經濟日報、鉅亨網… | +0.3 |
+| 公司新聞稿 press_release | Business Wire、PR Newswire | +0.2 |
+
+同一則新聞被多家轉載（網址不同、標題相同）→ 只留等級最高的那一筆，避免同一件事被重複計分。
+
 ### Step 1：單則新聞打分數（規則式 NLP）
 
 用一份**金融情緒詞典**（中英文都有）比對標題，每個詞有權重：
@@ -128,7 +141,7 @@ trailing_stop = 近 22 根最高價 − 3 × ATR       ← 吊燈停損，給「
 
 ### Step 2：挑出 Big News
 
-`重要性 = |情緒分數| + (是重大事件 ? 1 : 0)`
+`重要性 = |情緒分數| + (是重大事件 ? 1 : 0) + 來源等級加分`
 
 重大事件關鍵字：earnings、guidance、acquisition、FDA、lawsuit、財報、營收、法說會、併購、股利、關稅…
 近 48 小時內重要性最高的 **6 則**，就是這檔股票的「Big News」。

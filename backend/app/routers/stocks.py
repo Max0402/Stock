@@ -31,6 +31,7 @@ from ..services.catalog import BLUE_CHIPS
 from ..services.indicators import add_indicators
 from ..services.market_data import get_history
 from ..services.news_pipeline import latest_digest, refresh_symbol_news
+from ..services.news_sources import tier_of
 from ..services.signals import InsufficientDataError, compute_signal, signal_markers
 from ..services.symbols import InvalidSymbolError, normalize_symbol, symbol_info
 
@@ -115,7 +116,8 @@ def read_news(symbol: str, db: Session = Depends(get_db)):
         digest=sentiment_out(digest),
         articles=[
             NewsArticleOut(
-                title=a.title, url=a.url, source=a.source, published_at=a.published_at,
+                title=a.title, url=a.url, source=a.source, source_tier=tier_of(a.source, a.url),
+                published_at=a.published_at,
                 sentiment_label=a.sentiment_label, sentiment_score=a.sentiment_score, importance=a.importance,
             )
             for a in articles

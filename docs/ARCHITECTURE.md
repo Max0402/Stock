@@ -21,7 +21,7 @@ flowchart LR
 
     DB[("PostgreSQL / Supabase<br/>（本機：SQLite）")]
     YF["Yahoo Finance<br/>(yfinance)"]
-    GN["Google News RSS"]
+    GN["新聞來源<br/>Yahoo Finance · Google News<br/>證交所重大訊息 · Finnhub"]
     AI["Claude API<br/>（選用）"]
 
     UI -- "fetch /api/... (SWR 輪詢)" --> RW --> R
@@ -82,14 +82,15 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant S as APScheduler
-    participant G as Google News RSS
+    participant G as 新聞來源（4 個）
     participant A as Claude API
     participant D as DB
 
     S->>D: 要追蹤哪些股票？（持股 ∪ Watchlist ∪ 藍籌股）
     loop 每檔股票
-        S->>G: 抓近 48 小時新聞
-        S->>D: URL SHA-256 去重複後存 news_articles（含每則情緒分數）
+        S->>G: 平行抓 Yahoo / Google News / 證交所 / Finnhub（近 48 小時）
+        S->>S: 只留可信媒體白名單 → 同一則新聞多家轉載只留一筆
+        S->>D: URL SHA-256 + 標題指紋去重複後存 news_articles（含每則情緒分數）
         S->>S: 挑出 Big News（重要性前 6 則）+ 時間加權情緒
         alt 新聞組合跟上次一樣
             S->>S: 跳過（不重複花 AI 費用）
@@ -216,6 +217,8 @@ erDiagram
 | 惡意輸入 / Injection | 股票代碼白名單 Regex；ORM 參數化查詢（不拼 SQL 字串） | `services/symbols.py` |
 | IDOR（改網址 id 動到別人資料） | 查詢持股一定同時比對 `portfolio_id` | `routers/portfolio.py` |
 | 排程 API 被濫用 | 未設定密鑰 → 404；比對用 `secrets.compare_digest` 防計時攻擊 | `routers/jobs.py` |
+| 新聞雜訊 / 內容農場 | 只保留可信媒體白名單；網域比對加點號，避免 `evilreuters.com` 冒充 `reuters.com` | `services/news_sources.py` |
+| API Key 外洩到 log | Finnhub Key 用 `X-Finnhub-Token` Header 傳送，不放在網址上 | `services/news.py` |
 | XSS（新聞連結 `javascript:`） | 後端只收 http(s) 連結，前端再用 `safeExternalUrl` 檢查一次 | `services/news.py`、`lib/format.ts` |
 | Reverse tabnabbing | 外部連結加 `rel="noopener noreferrer"` | `NewsPanel.tsx` |
 | Prompt Injection（新聞標題要 AI 改答案） | 新聞放在 `<news>` 區塊並聲明是資料；Structured Output 固定格式；回傳值再驗證 / 夾住範圍 | `services/llm.py` |
