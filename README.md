@@ -122,7 +122,7 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 108 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
+cd backend && pytest -q          # 116 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```
@@ -188,8 +188,9 @@ Stock/
 這個專案刻意示範了幾個常見的 Web 資安防護，詳細表格見 [`docs/ARCHITECTURE.md` §5](docs/ARCHITECTURE.md#5-安全性設計security-notes)：
 輸入白名單驗證、IDOR 防護、排程 API 密鑰 + `compare_digest`、外部連結 XSS 過濾、`rel="noopener noreferrer"`、LLM Prompt Injection 防護、機密只放後端 `.env`、CORS 白名單。
 
-> ⚠️ 這是**單人使用**的設計：部署到網路上時，請務必設定 `APP_PASSWORD`，啟用整個網站的密碼保護（見 [`docs/DEPLOY.md`](docs/DEPLOY.md)）。
-> 要開放多人註冊，需要另外接上 Supabase Auth / NextAuth 等帳號系統（見 `backend/app/deps.py` 的註解）。
+> ⚠️ 部署到網路上時，請務必設定 `APP_PASSWORD`，啟用整個網站的密碼保護。
+> 想讓朋友使用：在 `APP_USERS` 幫每個人開帳號，每個人的持股與追蹤清單互相獨立（見 [`docs/DEPLOY.md`](docs/DEPLOY.md) 第 5 步）。
+> 要開放陌生人自行註冊，則需要另外接上 Supabase Auth 等帳號系統（見 `backend/app/deps.py` 的註解）。
 
 ---
 

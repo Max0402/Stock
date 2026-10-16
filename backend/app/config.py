@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # 網站密碼保護（部署到網路上時「一定要」設定 APP_PASSWORD）；留空 = 不需要登入
     app_username: str = "admin"
     app_password: str = ""
+    # 朋友的帳號（選填）："amy:密碼1,ben:密碼2"。每個帳號都有自己的持股與追蹤清單。
+    app_users: str = ""
 
     # ── 部署 ────────────────────────────────────────────────
     # 前端 build 出來的靜態檔資料夾（Docker 映像檔裡會自動設定）。

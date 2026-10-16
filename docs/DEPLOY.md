@@ -81,6 +81,41 @@ GitHub Actions ──┘ 每小時呼叫一次，更新新聞與訊號
 
 ---
 
+## 第 5 步（選做）：讓朋友也能使用
+
+每個朋友都會有**自己的帳號、自己的持股和追蹤清單**，彼此看不到對方的資料（新聞、K 線這些公開資料大家共用）。
+
+1. **幫朋友產生一組隨機密碼**（在你電腦的 PowerShell）：
+
+   ```powershell
+   python -c "import secrets; print(secrets.token_urlsafe(18))"
+   ```
+
+   > 為什麼不讓朋友自己想密碼？因為你（管理者）在 Render 上看得到這些密碼。
+   > 用隨機產生的，就不會有人把自己平常在用的密碼交給你。
+
+2. **到 Render → Environment → 新增（或編輯）`APP_USERS`**：
+
+   ```
+   amy:第一組隨機密碼,ben:第二組隨機密碼
+   ```
+
+   - 格式是 `帳號:密碼`，多個朋友用**逗號**隔開
+   - 帳號只能用英文、數字、`_`、`.`、`-`（最多 32 字）
+   - 按 Save，等服務重新部署完成（變回 Live）
+
+3. **把網址、帳號、密碼私下傳給朋友**（例如 LINE 私訊，不要貼在群組或公開的地方）
+
+4. 朋友登入後，右上角會顯示他的帳號名稱
+
+**移除朋友：** 從 `APP_USERS` 刪掉那一組並儲存，他就登不進去了（他的資料還留在資料庫，之後加回來會恢復）。
+**你自己的帳號**（`APP_USERNAME` / `APP_PASSWORD`）不變，之前輸入的持股也都還在。
+
+> 🔐 要讓朋友知道：身為管理者，你可以從 Neon 資料庫看到所有人輸入的持股。
+> 想開放給更多人、讓大家自己註冊和改密碼，需要真正的帳號系統（見最下面的「進階練習」）。
+
+---
+
 ## 常見問題
 
 **打開網站要等很久？**
@@ -117,6 +152,8 @@ docker run -p 8000:8000 \
 | 防護 | 說明 | 程式 |
 | --- | --- | --- |
 | 密碼保護 | 所有網頁與 API 都需要 HTTP Basic Auth；`compare_digest` 防計時攻擊 | `backend/app/security.py` |
+| 每人資料隔離 | 「目前使用者」只來自伺服器驗證過的帳號，查詢一律比對擁有者（防 IDOR） | `backend/app/deps.py`、`routers/portfolio.py` |
+| 防暴力破解 | 同一個 IP 10 分鐘內密碼錯 10 次 → 暫時封鎖（回傳 429） | `backend/app/security.py` |
 | 強制 HTTPS | 平台提供 HTTPS；回應帶 `Strict-Transport-Security`，瀏覽器之後一律走 HTTPS | 同上 |
 | 安全標頭 | `X-Frame-Options: DENY`（防點擊劫持）、`nosniff`、`Referrer-Policy` | 同上 |
 | 非 root 執行 | 容器以一般使用者 `appuser` 執行，就算被入侵權限也有限 | `Dockerfile` |

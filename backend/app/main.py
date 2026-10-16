@@ -15,7 +15,7 @@ from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -23,7 +23,7 @@ from .config import get_settings
 from .db import init_db
 from .jobs.hourly_news import run_hourly_job
 from .routers import jobs, portfolio, stocks, watchlist
-from .security import security_middleware
+from .security import load_accounts, security_middleware
 from .services.llm import llm_enabled
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -35,10 +35,14 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     init_db()
     log.info("data provider=%s, AI summary=%s", settings.data_provider, "Claude" if llm_enabled() else "rule-based")
-    if not settings.app_password:
+    accounts = load_accounts(settings)
+    if not accounts:
         log.warning("⚠️ 沒有設定 APP_PASSWORD：任何人都能開啟這個網站。部署到網路上前請務必設定！")
-    elif len(settings.app_password) < 12:
-        log.warning("⚠️ APP_PASSWORD 太短（< 12 字元），容易被暴力破解，建議換成隨機長密碼。")
+    else:
+        log.info("login enabled for %d account(s)", len(accounts))
+        for name, pw in accounts.items():
+            if len(pw) < 12:
+                log.warning("⚠️ 帳號 %s 的密碼太短（< 12 字元），容易被暴力破解，建議換成隨機長密碼。", name)
 
     scheduler = None
     if settings.enable_scheduler:
@@ -92,6 +96,12 @@ def health():
         "news_trusted_only": s.news_trusted_only,
         "ai_summary": "claude" if llm_enabled() else "rule",
     }
+
+
+@app.get("/api/me")
+def me(request: Request):
+    """目前登入的帳號（前端右上角顯示用）。沒有啟用登入時回傳 null。"""
+    return {"username": request.state.username}
 
 
 # ── 部署模式：同一個服務也提供前端網頁 ───────────────────────────────

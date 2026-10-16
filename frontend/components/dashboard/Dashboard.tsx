@@ -13,7 +13,7 @@
 // └──────────────────────────────────────────────────────────┘
 // 「目前選中的股票」是整頁共用的狀態：點任何卡片 → K 線與新聞切換到該股票。
 
-import { LineChart, Plus, RefreshCw, ServerCrash } from "lucide-react";
+import { LineChart, Plus, RefreshCw, ServerCrash, UserRound } from "lucide-react";
 import { useCallback, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
@@ -38,6 +38,7 @@ const DEFAULT_SYMBOL = "2330.TW";
 export function Dashboard() {
   // 每 60 秒自動更新報價（後端報價快取也是 60 秒）
   const { data, error, isLoading, isValidating } = useSWR<Portfolio>("/api/portfolio", { refreshInterval: 60_000 });
+  const { data: me } = useSWR<{ username: string | null }>("/api/me");
   const { mutate } = useSWRConfig();
   const { convention, setConvention } = useMarketColors();
 
@@ -79,6 +80,13 @@ export function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 多人使用時顯示目前登入的帳號，避免在別人的裝置上看錯投資組合 */}
+          {me?.username && (
+            <span className="flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground" title="目前登入的帳號">
+              <UserRound className="h-3.5 w-3.5" />
+              {me.username}
+            </span>
+          )}
           <Segmented<Convention>
             ariaLabel="漲跌顏色"
             value={convention}
