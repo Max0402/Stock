@@ -252,3 +252,42 @@ def test_parse_yahoo_lenient_variants():
     ]
     out = parse_yahoo_news(items)
     assert [a.title for a in out] == ["Lowercase type"]
+
+
+# ── Yahoo Search 備援 ─────────────────────────────────────────────
+SEARCH_ITEMS = [
+    {"uuid": "1", "title": "TSMC posts record quarterly profit", "publisher": "Reuters", "type": "STORY",
+     "link": "https://finance.yahoo.com/news/tsmc-1.html", "providerPublishTime": int(NOW.timestamp()) - 3600,
+     "relatedTickers": ["2330.TW", "TSM"]},
+    {"uuid": "2", "title": "Chip stocks rally on AI demand", "publisher": "Bloomberg", "type": "STORY",
+     "link": "https://finance.yahoo.com/news/chips-2.html", "providerPublishTime": int(NOW.timestamp()) - 3600,
+     "relatedTickers": ["2330.TW"]},  # 標題沒寫台積電，但 Yahoo 已標註 2330.TW → 保留
+    {"uuid": "3", "title": "Oil prices climb", "publisher": "Reuters", "type": "STORY",
+     "link": "https://finance.yahoo.com/news/oil-3.html", "providerPublishTime": int(NOW.timestamp()) - 3600,
+     "relatedTickers": ["CL=F"]},     # 無關 → 丟掉
+    {"uuid": "4", "title": "Video: TSMC", "publisher": "Reuters", "type": "VIDEO",
+     "link": "https://finance.yahoo.com/video/4.html", "providerPublishTime": int(NOW.timestamp())},
+]
+
+
+def test_yahoo_falls_back_to_search(monkeypatch):
+    import yfinance
+
+    class FakeTicker:
+        def __init__(self, s): ...
+        def get_news(self, count=20): return []   # 個股新聞端點回傳空的
+
+    class FakeSearch:
+        def __init__(self, q, **kw): self.news = SEARCH_ITEMS
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    monkeypatch.setattr(yfinance, "Search", FakeSearch)
+    got = news.fetch_yahoo_news("2330.TW")
+    assert [a.provider for a in got] == ["yahoo_search"] * 3  # 影片被跳過
+    kept = select_articles(got, trusted_only=True, now=NOW, terms=relevance_terms("2330.TW"))
+    assert sorted(a.title for a in kept) == ["Chip stocks rally on AI demand", "TSMC posts record quarterly profit"]
+
+
+def test_clean_title_strips_cna_section_suffix():
+    assert _clean_title("為胡正明新書站台魏哲家：台積電股價跌心情不好| 生活", "中央社") == "為胡正明新書站台魏哲家：台積電股價跌心情不好"
+    assert _clean_title("Apple | Earnings Preview", "CNBC") == "Apple | Earnings Preview"  # 英文不動

@@ -64,6 +64,7 @@ class RawArticle:
     provider: str = "google"        # 從哪個管道抓到：yahoo / google / twse / finnhub / demo
     source_url: str | None = None   # 發布者網址（判斷是否為可信來源用）
     uid: str | None = None          # 去重複用的唯一鍵；預設就是 url
+    tickers: tuple[str, ...] = ()   # 來源標註的相關股票代碼（Yahoo Search 會提供）
 
     @property
     def key(self) -> str:
@@ -103,6 +104,10 @@ _NOISE_RE = re.compile(
 )
 
 
+# 這些管道是「關鍵字搜尋」，容易混進無關新聞 → 需要做相關性檢查
+SEARCH_PROVIDERS = {"google", "yahoo_search"}
+
+
 def relevance_terms(symbol: str) -> list[str]:
     """這檔股票的關鍵字：藍籌股用 catalog 設定；其他股票用代碼 + Yahoo 上的公司名稱。"""
     if symbol in CATALOG and CATALOG[symbol].keywords:
@@ -140,7 +145,7 @@ def news_query(symbol: str) -> str:
 # ═════════════════════════════════════════════════════════════════════
 # 1) Yahoo Finance
 # ═════════════════════════════════════════════════════════════════════
-def parse_yahoo_news(items: list[dict]) -> list[RawArticle]:
+def parse_yahoo_news(items: list[dict], provider_name: str = "yahoo") -> list[RawArticle]:
     """
     yfinance 新版格式：{"id": ..., "content": {"title", "pubDate", "provider": {"displayName"},
                                              "canonicalUrl": {"url"}, "clickThroughUrl": {"url"}}}
@@ -149,7 +154,7 @@ def parse_yahoo_news(items: list[dict]) -> list[RawArticle]:
     out: list[RawArticle] = []
     for item in items:
         c = item.get("content") or item
-        if "video" in str(c.get("contentType") or "").lower():
+        if "video" in str(c.get("contentType") or c.get("type") or "").lower():
             continue  # 跳過影片（大小寫都可能出現，所以統一轉小寫判斷）
         title = (c.get("title") or "").strip()
         canonical = (c.get("canonicalUrl") or {}).get("url")
@@ -166,14 +171,23 @@ def parse_yahoo_news(items: list[dict]) -> list[RawArticle]:
         else:
             continue
         if title and _is_http(url):
-            out.append(RawArticle(title, url, source, published, "yahoo", provider.get("url") or url))
+            out.append(RawArticle(title, url, source, published, provider_name, provider.get("url") or url,
+                                  tickers=tuple(c.get("relatedTickers") or ())))
     return out
 
 
 def fetch_yahoo_news(symbol: str) -> list[RawArticle]:
+    """
+    先用個股新聞（Ticker.get_news）；Yahoo 有時候這個端點會回傳空的，
+    這時改用 Yahoo 搜尋 API（Search.news，query2.finance.yahoo.com），它也會附上發布者名稱。
+    """
     import yfinance as yf
 
-    return parse_yahoo_news(yf.Ticker(symbol).get_news(count=20))
+    items = yf.Ticker(symbol).get_news(count=20)
+    if items:
+        return parse_yahoo_news(items)
+    search = yf.Search(symbol, max_results=1, news_count=20, lists_count=0, include_cb=False)
+    return parse_yahoo_news(search.news, provider_name="yahoo_search")
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -200,8 +214,9 @@ def _clean_title(title: str, source: str | None) -> str:
         head, tail = title.rsplit(" - ", 1)
         tail = tail.strip()
         if (source and tail.lower() == source.strip().lower()) or classify_source(tail) is not None:
-            return head.strip()
-    return title
+            title = head.strip()
+    # 中央社等網站標題結尾會帶分類，例如「…心情不好| 生活」→ 去掉（只處理 1~4 個中文字的分類）
+    return re.sub(r"\s*\|\s*[\u4e00-\u9fff]{1,4}$", "", title)
 
 
 def parse_google_rss(content: bytes) -> list[RawArticle]:
@@ -376,16 +391,18 @@ def select_articles(
 ) -> list[RawArticle]:
     """
     過濾 → 統一來源名稱 → 跨來源去重複（保留等級最高的）→ 新到舊排序。
-    terms：相關性關鍵字。只套用在 Google News（關鍵字搜尋容易混進無關新聞）；
-    Yahoo / Finnhub / 證交所本來就是「依個股」提供，標題不一定寫出公司名稱，所以不套用。
+    terms：相關性關鍵字。只套用在「關鍵字搜尋」型的管道（Google News、Yahoo Search）；
+    Yahoo 個股新聞 / Finnhub / 證交所本來就是「依個股」提供，標題不一定寫出公司名稱，所以不套用。
     """
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=MAX_AGE_HOURS)
     kept: dict[str, RawArticle] = {}
     for a in articles:
         if a.published_at < cutoff or not _is_http(a.url) or _NOISE_RE.search(a.title):
             continue
-        if terms and a.provider == "google" and not is_relevant(a.title, terms):
-            continue
+        if terms and a.provider in SEARCH_PROVIDERS:
+            tagged = any(t.split(".")[0].lower() in terms for t in a.tickers)  # 來源已標註這檔股票
+            if not tagged and not is_relevant(a.title, terms):
+                continue
         trusted = classify_source(a.source, a.source_url or a.url)
         if trusted_only and trusted is None:
             continue

@@ -97,7 +97,7 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 
 | 來源 | 適用 | 需要 Key？ | 說明 |
 | --- | --- | --- | --- |
-| **Yahoo Finance** | 美股、台股 | 不用 | yfinance 個股新聞，原始發布者（Reuters、Bloomberg…）會被保留下來 |
+| **Yahoo Finance** | 美股、台股 | 不用 | yfinance 個股新聞；該端點沒資料時自動改用 Yahoo 搜尋 API。原始發布者（Reuters、Bloomberg…）會被保留下來 |
 | **Google News RSS** | 美股、台股 | 不用 | 搜尋時用 `site:` 只找可信媒體；台股用繁中搜尋 |
 | **證交所重大訊息** | 上市股（`.TW`） | 不用 | [TWSE OpenAPI](https://openapi.twse.com.tw/)「上市公司每日重大訊息」，官方第一手資料 |
 | **Finnhub** | 美股 | 免費 Key | 在 `.env` 設定 `FINNHUB_API_KEY` 才會啟用 |
@@ -115,7 +115,7 @@ Supabase：到 Project Settings → Database 複製連線字串，把開頭的 `
 ## 🧪 測試
 
 ```bash
-cd backend && pytest -q          # 83 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
+cd backend && pytest -q          # 85 個測試：指標、訊號、情緒、損益、新聞來源解析、API、AI 回應解析
 cd frontend && npm run typecheck # TypeScript 型別檢查
 cd frontend && npm run build     # 正式版建置
 ```

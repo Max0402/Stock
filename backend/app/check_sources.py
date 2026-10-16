@@ -50,7 +50,8 @@ def check(symbol: str) -> None:
             print(f"  {name:<7}⏭️  不適用於這檔股票（或未設定 API Key）")
         else:
             kept = select_articles(got, trusted_only=True, terms=terms)
-            print(f"  {name:<7}✅ 抓到 {len(got)} 則 → 可信且相關 {len(kept)} 則  [{sec:.1f}s]")
+            via = "（改用 Yahoo Search）" if got and got[0].provider == "yahoo_search" else ""
+            print(f"  {name:<7}✅ 抓到 {len(got)} 則 → 可信且相關 {len(kept)} 則{via}  [{sec:.1f}s]")
             for a in kept[:3]:
                 print(f"           · [{a.source}] {a.title[:70]}")
             if name == "yahoo" and not got:
@@ -58,24 +59,18 @@ def check(symbol: str) -> None:
 
 
 def _debug_yahoo_raw(symbol: str) -> None:
-    """Yahoo 回傳 0 則時：印出原始資料結構，判斷是「Yahoo 沒給資料」還是「我們解析失敗」。"""
+    """Yahoo 回傳 0 則時：分別印出兩個 Yahoo 端點的原始資料，判斷是「Yahoo 沒給」還是「我們解析失敗」。"""
     import yfinance as yf
 
-    try:
-        raw = yf.Ticker(symbol).get_news(count=5)
-    except Exception as exc:
-        print(f"           🔍 原始請求失敗：{type(exc).__name__}: {exc}")
-        return
-    print(f"           🔍 Yahoo 原始回傳 {len(raw)} 筆")
-    if raw:
-        first = raw[0]
-        content = first.get("content") if isinstance(first.get("content"), dict) else {}
-        print(f"           🔍 第一筆欄位：{sorted(first)}")
-        print(f"           🔍 content 欄位：{sorted(content)}")
-        print("           🔍 內容片段：" + json.dumps(first, ensure_ascii=False, default=str)[:600])
+    def show(label, fetch):
+        try:
+            raw = fetch()
+        except Exception as exc:
+            print(f"           🔍 {label}：請求失敗 {type(exc).__name__}: {exc}")
+            return
+        print(f"           🔍 {label}：原始回傳 {len(raw)} 筆")
+        if raw:
+            print("           🔍 第一筆：" + json.dumps(raw[0], ensure_ascii=False, default=str)[:500])
 
-
-if __name__ == "__main__":
-    logging.getLogger("yfinance").setLevel(logging.CRITICAL)  # 隱藏 yfinance 內部的重試訊息
-    for raw in sys.argv[1:] or ["AAPL", "2330.TW"]:
-        check(normalize_symbol(raw))
+    show("Ticker.get_news", lambda: yf.Ticker(symbol).get_news(count=5))
+    show("Search.news", lambda: yf.Search(symbol, max_results=1, news_count=5, lists_count=0, include_cb=False).news)
